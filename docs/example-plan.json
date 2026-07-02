@@ -1,0 +1,163 @@
+{
+  "name": "Half Ironman 16-Week Build",
+  "startDate": "2026-06-29",
+  "raceDate": "2026-10-18",
+  "phases": [
+    { "name": "Base",  "weeks": [1, 2, 3, 4] },
+    { "name": "Build", "weeks": [5, 6, 7, 8, 9, 10] },
+    { "name": "Peak",  "weeks": [11, 12, 13, 14] },
+    { "name": "Taper", "weeks": [15, 16] }
+  ],
+  "sessions": [
+    {
+      "date": "2026-06-29",
+      "sport": "run",
+      "distance": 8,
+      "duration": 52,
+      "note": "Easy aerobic run",
+      "steps": [
+        { "type": "warmup",   "duration": 8,  "pace": "6:30/km" },
+        { "type": "easy",     "duration": 36, "pace": "6:05/km" },
+        { "type": "cooldown", "duration": 8,  "pace": "6:45/km" }
+      ]
+    },
+    {
+      "date": "2026-06-30",
+      "sport": "gym",
+      "duration": 60,
+      "note": "Lower body"
+    },
+    {
+      "date": "2026-07-01",
+      "sport": "swim",
+      "distance": 2.0,
+      "duration": 50,
+      "note": "Technique & easy aerobic",
+      "steps": [
+        { "type": "warmup",   "duration": 10, "pace": "2:20/100m" },
+        { "type": "easy",     "duration": 30, "pace": "2:05/100m" },
+        { "type": "cooldown", "duration": 10, "pace": "2:20/100m" }
+      ]
+    },
+    {
+      "date": "2026-07-02",
+      "sport": "bike",
+      "distance": 50,
+      "duration": 100,
+      "note": "Easy endurance ride, flat roads",
+      "steps": [
+        { "type": "warmup",   "duration": 15, "pace": "26 km/h" },
+        { "type": "easy",     "duration": 70, "pace": "30 km/h" },
+        { "type": "cooldown", "duration": 15, "pace": "25 km/h" }
+      ]
+    },
+    {
+      "date": "2026-07-03",
+      "sport": "gym",
+      "duration": 55,
+      "note": "Upper body"
+    },
+    {
+      "date": "2026-07-04",
+      "sport": "run",
+      "distance": 14,
+      "duration": 90,
+      "note": "Long run, aerobic base",
+      "steps": [
+        { "type": "warmup",   "duration": 10, "pace": "6:30/km" },
+        { "type": "easy",     "duration": 70, "pace": "6:10/km" },
+        { "type": "cooldown", "duration": 10, "pace": "6:45/km" }
+      ]
+    },
+    {
+      "date": "2026-07-06",
+      "sport": "swim",
+      "distance": 2.5,
+      "duration": 60,
+      "note": "Threshold intervals",
+      "steps": [
+        { "type": "warmup",   "duration": 10, "pace": "2:20/100m" },
+        { "type": "interval", "reps": 5, "distance": 0.4, "pace": "1:55/100m", "rest": "30s" },
+        { "type": "cooldown", "duration": 10, "pace": "2:20/100m" }
+      ]
+    },
+    {
+      "date": "2026-07-07",
+      "sport": "bike",
+      "distance": 80,
+      "duration": 160,
+      "note": "Long ride, zone 2",
+      "steps": [
+        { "type": "warmup",   "duration": 20, "pace": "26 km/h" },
+        { "type": "easy",     "duration": 120, "pace": "30 km/h" },
+        { "type": "cooldown", "duration": 20, "pace": "25 km/h" }
+      ]
+    },
+    {
+      "date": "2026-07-08",
+      "sport": "run",
+      "distance": 10,
+      "duration": 63,
+      "note": "Tempo intervals",
+      "steps": [
+        { "type": "warmup",   "duration": 12, "pace": "6:30/km" },
+        { "type": "interval", "reps": 2, "duration": 15, "pace": "5:10/km", "rest": "3min easy" },
+        { "type": "cooldown", "duration": 12, "pace": "6:30/km" }
+      ]
+    },
+    {
+      "date": "2026-07-09",
+      "sport": "gym",
+      "duration": 55,
+      "note": "Lower body"
+    },
+    {
+      "date": "2026-07-10",
+      "sport": "swim",
+      "distance": 2.0,
+      "duration": 50,
+      "note": "Recovery swim, form focus",
+      "steps": [
+        { "type": "warmup",   "duration": 10, "pace": "2:20/100m" },
+        { "type": "recovery", "duration": 30, "pace": "2:10/100m" },
+        { "type": "cooldown", "duration": 10, "pace": "2:20/100m" }
+      ]
+    },
+    {
+      "date": "2026-07-11",
+      "sport": "bike",
+      "distance": 60,
+      "duration": 120,
+      "note": "Brick bike — race simulation",
+      "steps": [
+        { "type": "warmup",   "duration": 15, "pace": "26 km/h" },
+        { "type": "threshold","duration": 60, "pace": "33 km/h" },
+        { "type": "tempo",    "duration": 30, "pace": "31 km/h" },
+        { "type": "cooldown", "duration": 15, "pace": "25 km/h" }
+      ]
+    },
+    {
+      "date": "2026-07-11",
+      "sport": "run",
+      "distance": 5,
+      "duration": 30,
+      "note": "Brick run off bike",
+      "steps": [
+        { "type": "race-pace","duration": 20, "pace": "5:20/km" },
+        { "type": "cooldown", "duration": 10, "pace": "6:30/km" }
+      ]
+    },
+    {
+      "date": "2026-07-12",
+      "sport": "run",
+      "distance": 16,
+      "duration": 105,
+      "note": "Long run, easy throughout",
+      "steps": [
+        { "type": "warmup",   "duration": 10, "pace": "6:30/km" },
+        { "type": "easy",     "duration": 85, "pace": "6:10/km" },
+        { "type": "cooldown", "duration": 10, "pace": "6:45/km" }
+      ]
+    }
+  ]
+}
