@@ -1,82 +1,60 @@
-# TriLog — Triathlon Training Log with Strava Sync
+# TriLog
 
-A personal training log that auto-syncs from Strava (and Garmin via Strava). Built with React + Vite, deployed on Vercel.
+A personal triathlon training tracker with Strava sync, structured workout plans, and cross-device sync via user accounts.
 
----
+Built with Next.js 15, TypeScript, Supabase Postgres, and deployed on Vercel.
 
-## Setup (one-time, ~10 minutes)
+## Features
 
-### 1. Create a Strava API app
-
-1. Go to https://www.strava.com/settings/api
-2. Create an app (name it anything — "TriLog" works)
-3. Set **Authorization Callback Domain** to your Vercel domain, e.g. `trilog.vercel.app`
-4. Note your **Client ID** and **Client Secret**
-
-### 2. Deploy to Vercel
-
-```bash
-npm install -g vercel   # if not already installed
-npm install
-vercel                  # follow prompts, link or create a project
-```
-
-### 3. Set environment variables in Vercel
-
-In your Vercel project dashboard → Settings → Environment Variables, add:
-
-| Name | Value |
-|------|-------|
-| `STRAVA_CLIENT_ID` | Your Strava app Client ID |
-| `STRAVA_CLIENT_SECRET` | Your Strava app Client Secret |
-| `APP_URL` | Your Vercel deployment URL, e.g. `https://trilog.vercel.app` |
-
-Then redeploy:
-```bash
-vercel --prod
-```
-
-### 4. Connect Strava
-
-Open your deployed app, click **Connect Strava**, and authorise. That's it — your Garmin activities (synced via Strava) will appear automatically.
-
----
-
-## Local development
-
-```bash
-vercel dev   # runs both Vite and the serverless functions together
-```
-
-Then open http://localhost:3000.
-
----
+- Strava sync — activities pulled automatically via OAuth
+- Manual session logging with heart rate tracking
+- AI-generated training plans with structured workout steps (warmup, intervals, cooldown, paces)
+- Weekly progress tracking against targets
+- Monthly calendar view
+- Cross-device sync — data lives in Postgres, not the browser
 
 ## Project structure
 
 ```
 trilog/
-├── api/
-│   ├── auth/
-│   │   ├── strava.js      ← redirects to Strava OAuth
-│   │   ├── callback.js    ← exchanges code for token, sets cookie
-│   │   └── disconnect.js  ← clears the auth cookie
-│   └── activities.js      ← fetches activities from Strava
-├── src/
-│   ├── App.jsx            ← main React app
-│   └── main.jsx           ← entry point
-├── index.html
-├── package.json
-├── vite.config.js
-└── vercel.json
+├── app/
+│   ├── page.tsx                  ← entry point
+│   ├── layout.tsx
+│   └── api/
+│       ├── state/                ← load all user data on mount
+│       ├── sessions/             ← create / delete manual sessions
+│       ├── plan/                 ← save / clear training plan
+│       ├── targets/              ← save weekly targets
+│       ├── activities/           ← fetch Strava activities
+│       └── auth/
+│           ├── strava/           ← redirect to Strava OAuth
+│           ├── callback/         ← exchange code, upsert user, set session
+│           └── disconnect/       ← logout
+├── components/
+│   ├── TriLog.tsx                ← root shell
+│   ├── WeekView.tsx
+│   ├── CalendarView.tsx
+│   ├── AddView.tsx
+│   ├── PlanView.tsx
+│   ├── SessionRow.tsx
+│   └── ui.tsx
+├── lib/
+│   ├── types.ts
+│   ├── constants.ts
+│   ├── helpers.ts
+│   ├── db.ts                     ← Postgres client
+│   └── session.ts                ← JWT session helpers
+├── db/
+│   └── schema.sql
+└── docs/
+    ├── PLAN_FORMAT.md
+    └── example-plan.json
 ```
 
-## How auth works
+## Auth & data model
 
-No database required. The Strava refresh token is stored in a secure `HttpOnly` cookie set by the server. On every `/api/activities` call, the server:
-1. Reads the refresh token from the cookie
-2. Gets a fresh access token from Strava (they expire every 6h)
-3. Fetches your last 60 days of Run/Ride/Swim activities
-4. Returns them in TriLog format
+Login is "Sign in with Strava" — no passwords. The Strava OAuth callback upserts a `users` row keyed on the athlete's Strava ID and stores the refresh token there. A signed JWT in an HttpOnly cookie (`tl_session`) identifies the user on subsequent requests. Manual sessions, the training plan, and weekly targets are all stored in Postgres per user.
 
-Strava sessions are merged with any manually logged sessions on the frontend.
+Strava activities are never persisted — they are fetched live on each sync.
+
+See [SETUP.md](SETUP.md) to get it running.
