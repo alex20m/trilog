@@ -1,8 +1,11 @@
 'use client';
 
-import { C, SPORTS, STEP_COLORS } from '@/lib/constants';
-import { fmtKm, fmtDur, fmtPace, fmtStep, todayStr } from '@/lib/helpers';
+import { useEffect, useRef, useState } from 'react';
+import { SPORTS } from '@/lib/constants';
+import { fmtKm, fmtDur, fmtPace, todayStr } from '@/lib/helpers';
 import type { Session } from '@/lib/types';
+import { IconCheck, IconHeart, IconTrash, SPORT_ICONS } from './icons';
+import { StepList } from './ui';
 
 interface Props {
   planned: Session | null;
@@ -11,75 +14,112 @@ interface Props {
 }
 
 export default function SessionRow({ planned, actual, onDelete }: Props) {
-  const sport = SPORTS[(planned ?? actual!).sport];
+  const sportKey = (planned ?? actual!).sport;
+  const sport = SPORTS[sportKey];
+  const Icon = SPORT_ICONS[sportKey];
   const isDone = !!actual;
-  const isFuture = !actual && (planned?.date ?? '') > todayStr();
+  // Today counts as pending/upcoming — "missed" only applies to strictly past days.
+  const isFuture = !actual && (planned?.date ?? '') >= todayStr();
+
+  const [confirm, setConfirm] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const deletable = actual?.source === 'manual' && actual.id !== undefined;
+
+  const handleDelete = () => {
+    clearTimeout(timer.current);
+    if (!confirm) {
+      setConfirm(true);
+      timer.current = setTimeout(() => setConfirm(false), 3000);
+    } else {
+      setRemoving(true);
+      timer.current = setTimeout(() => onDelete(actual!.id!), 200);
+    }
+  };
+
+  const rowClass = [
+    'session-row',
+    `sport-${sportKey}`,
+    isDone && 'is-done',
+    confirm && 'is-confirm',
+    removing && 'is-removing',
+  ].filter(Boolean).join(' ');
 
   return (
-    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-      <div style={{ marginTop: '2px', width: '16px', flexShrink: 0, textAlign: 'center', fontSize: '13px' }}>
-        {isDone
-          ? <span style={{ color: C.green }}>✓</span>
-          : isFuture
-            ? <span style={{ color: C.muted }}>○</span>
-            : <span style={{ color: '#E8A030' }}>!</span>}
-      </div>
+    <div className={rowClass}>
+      <span
+        className={`session-status ${isDone ? 'is-done' : isFuture ? 'is-future' : 'is-missed'}`}
+        aria-hidden="true"
+      >
+        {isDone ? <IconCheck /> : isFuture ? null : '!'}
+      </span>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <Icon className="session-icon" />
+
+      <div className="session-content">
         {planned && (
-          <div style={{ fontSize: '13px', color: isDone ? C.muted : C.text, marginBottom: actual ? '3px' : 0 }}>
-            <span style={{ fontWeight: '500' }}>{sport.icon} {sport.label}</span>
-            {planned.distance && <span> · {fmtKm(planned.distance)} km</span>}
-            {planned.duration && <span style={{ color: C.muted }}> · {fmtDur(planned.duration)}</span>}
+          <div className="session-planned">
+            <span className="session-sport">{sport.label}</span>
+            {planned.distance !== undefined && (
+              <span className="t-num"> · {fmtKm(planned.distance)} km</span>
+            )}
+            {planned.duration > 0 && (
+              <span className="session-dim t-num"> · {fmtDur(planned.duration)}</span>
+            )}
             {!planned.steps && planned.intensity && (
-              <span style={{ fontSize: '11px', color: sport.color, marginLeft: '5px', background: sport.color + '15', padding: '1px 5px', borderRadius: '4px' }}>
-                {planned.intensity}
-              </span>
+              <span className="intensity-chip">{planned.intensity}</span>
             )}
-            {planned.note && (
-              <div style={{ fontSize: '12px', color: C.muted, marginTop: '2px', fontStyle: 'italic' }}>{planned.note}</div>
-            )}
-            {planned.steps && planned.steps.length > 0 && (
-              <div style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {planned.steps.map((step, i) => (
-                  <div key={i} style={{ display: 'flex', gap: '6px', fontSize: '11px' }}>
-                    <span style={{ color: STEP_COLORS[step.type] ?? C.muted, fontWeight: '600', textTransform: 'capitalize', minWidth: '72px', flexShrink: 0 }}>
-                      {step.type}
-                    </span>
-                    <span style={{ color: isDone ? C.muted : C.text + '99' }}>{fmtStep(step)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            {planned.note && <div className="session-note">{planned.note}</div>}
+            {planned.steps && planned.steps.length > 0 && <StepList steps={planned.steps} />}
             {!planned.steps && planned.exercises && planned.exercises.length > 0 && (
-              <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px' }}>{planned.exercises.join(' · ')}</div>
+              <div className="session-note">{planned.exercises.join(' · ')}</div>
             )}
           </div>
         )}
 
         {actual && (
-          <div style={{ fontSize: '13px', color: C.text }}>
-            {!planned && <span style={{ fontWeight: '500' }}>{sport.icon} {sport.label} </span>}
-            {actual.distance && <span style={{ color: planned ? C.green : C.text }}>↑ {fmtKm(actual.distance)} km</span>}
-            {actual.duration && <span style={{ color: C.muted }}> · {fmtDur(actual.duration)}</span>}
+          <div className="session-actual">
+            {!planned && <span className="session-sport">{sport.label} </span>}
+            {actual.distance !== undefined && (
+              <span className="t-num">
+                {planned && <span className="up-arrow">↑ </span>}
+                {fmtKm(actual.distance)} km
+              </span>
+            )}
+            {actual.duration > 0 && (
+              <span className="session-dim t-num">
+                {actual.distance !== undefined || !planned ? ' · ' : ''}
+                {fmtDur(actual.duration)}
+              </span>
+            )}
             {actual.sport === 'run' && actual.distance && actual.duration && (
-              <span style={{ color: C.muted }}> · {fmtPace(actual.duration / actual.distance)}/km</span>
+              <span className="session-dim t-num"> · {fmtPace(actual.duration / actual.distance)}/km</span>
             )}
             {actual.heartRate && (
-              <span style={{ color: C.muted, fontSize: '11px', marginLeft: '4px' }}>♥ {actual.heartRate}</span>
+              <span className="hr-read t-num">
+                <IconHeart /> {actual.heartRate}
+              </span>
             )}
-            {actual.source === 'strava' && (
-              <span style={{ color: C.strava, fontSize: '11px', marginLeft: '4px' }}>Strava</span>
-            )}
-            {actual.source === 'manual' && actual.id !== undefined && (
-              <button onClick={() => onDelete(actual.id!)} style={{ background: 'none', border: 'none', color: C.border, cursor: 'pointer', fontSize: '14px', padding: '0 0 0 4px' }}>×</button>
-            )}
+            {actual.source === 'strava' && <span className="source-tag">STRAVA</span>}
             {actual.exercises && actual.exercises.length > 0 && (
-              <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px' }}>{actual.exercises.join(' · ')}</div>
+              <div className="session-note">{actual.exercises.join(' · ')}</div>
             )}
+            {actual.notes && <div className="session-note">{actual.notes}</div>}
           </div>
         )}
       </div>
+
+      {deletable && (
+        <button
+          className={confirm ? 'icon-btn row-del is-confirm' : 'icon-btn row-del'}
+          onClick={handleDelete}
+          aria-label={confirm ? 'Confirm delete' : 'Delete session'}
+        >
+          {confirm ? 'Delete?' : <IconTrash width={16} height={16} />}
+        </button>
+      )}
     </div>
   );
 }
