@@ -293,7 +293,7 @@ button { font-family: inherit; }
 @media (max-width: 399px) { .sync-time { display: none; } }
 
 .icon-btn {
-  width: 40px; height: 40px;
+  width: var(--touch-min); height: var(--touch-min); /* visibly 44×44 */
   display: grid; place-items: center;
   border: none; border-radius: var(--r-md);
   background: transparent; color: var(--c-text-2);
@@ -302,7 +302,6 @@ button { font-family: inherit; }
               color var(--dur-fast) var(--ease-out),
               transform var(--dur-fast) var(--ease-out);
 }
-.icon-btn::after { content: ''; position: absolute; inset: -2px; }
 .icon-btn:hover  { background: var(--c-surface-2); color: var(--c-text); }
 .icon-btn:active { transform: scale(0.92); }
 .icon-btn:disabled { opacity: 0.5; cursor: default; }

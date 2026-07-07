@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { SPORTS } from '@/lib/constants';
-import { fmtDur, todayStr } from '@/lib/helpers';
+import { dateStr, fmtDur, todayStr } from '@/lib/helpers';
 import type { FormState, Sport } from '@/lib/types';
 import { SPORT_ICONS } from './icons';
 import { Field, Stepper } from './ui';
@@ -13,12 +13,12 @@ interface Props {
   onAdd: () => void;
 }
 
-type FieldKey = 'distance' | 'duration' | 'heartRate' | 'date';
+type FieldKey = 'distance' | 'heartRate' | 'date';
 
 function yesterdayStr(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  return d.toISOString().split('T')[0];
+  return dateStr(d);
 }
 
 export default function AddView({ form, setForm, onAdd }: Props) {
@@ -30,7 +30,6 @@ export default function AddView({ form, setForm, onAdd }: Props) {
   const [submitted, setSubmitted] = useState(false);
 
   const distRef = useRef<HTMLInputElement>(null);
-  const durRef = useRef<HTMLDivElement>(null);
   const hrRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
 
@@ -38,10 +37,10 @@ export default function AddView({ form, setForm, onAdd }: Props) {
   const totalMin = (parseInt(form.hours) || 0) * 60 + (parseInt(form.minutes) || 0);
   const hr = form.heartRate === '' ? null : parseFloat(form.heartRate);
 
+  // Duration needs no validation: the stepper is clamped to 0:05–12:55.
   const errors: Record<FieldKey, string | null> = {
     distance: !isGym && !(parseFloat(form.distance) > 0)
       ? 'Enter a distance greater than 0' : null,
-    duration: totalMin <= 0 ? "Duration can't be zero" : null,
     heartRate: hr !== null && !(hr >= 30 && hr <= 250)
       ? 'Heart rate looks off (30–250 bpm)' : null,
     date: form.date > todayStr() ? "You can't log a future session" : null,
@@ -56,7 +55,6 @@ export default function AddView({ form, setForm, onAdd }: Props) {
     setSubmitted(true);
     const order: [FieldKey, React.RefObject<HTMLElement>][] = [
       ['distance', distRef],
-      ['duration', durRef],
       ['heartRate', hrRef],
       ['date', dateRef],
     ];
@@ -117,19 +115,17 @@ export default function AddView({ form, setForm, onAdd }: Props) {
         </Field>
       )}
 
-      <Field label="Duration" error={show('duration')} errorId="err-duration">
-        <div ref={durRef}>
-          <Stepper
-            value={totalMin}
-            display={fmtDur(totalMin)}
-            step={5}
-            min={5}
-            max={775}
-            onChange={setDuration}
-            decLabel="Decrease duration"
-            incLabel="Increase duration"
-          />
-        </div>
+      <Field label="Duration">
+        <Stepper
+          value={totalMin}
+          display={fmtDur(totalMin)}
+          step={5}
+          min={5}
+          max={775}
+          onChange={setDuration}
+          decLabel="Decrease duration"
+          incLabel="Increase duration"
+        />
       </Field>
 
       <Field label="Avg heart rate (bpm)" optional error={show('heartRate')} errorId="err-hr" htmlFor="f-hr">

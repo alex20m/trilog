@@ -18,7 +18,8 @@ export default function SessionRow({ planned, actual, onDelete }: Props) {
   const sport = SPORTS[sportKey];
   const Icon = SPORT_ICONS[sportKey];
   const isDone = !!actual;
-  const isFuture = !actual && (planned?.date ?? '') > todayStr();
+  // Today counts as pending/upcoming — "missed" only applies to strictly past days.
+  const isFuture = !actual && (planned?.date ?? '') >= todayStr();
 
   const [confirm, setConfirm] = useState(false);
   const [removing, setRemoving] = useState(false);

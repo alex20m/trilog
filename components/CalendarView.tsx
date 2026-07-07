@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { SPORTS } from '@/lib/constants';
-import { fmtDateLong, getMonthDays, pairSessions, todayStr } from '@/lib/helpers';
+import { dateStr, fmtDateLong, getMonthDays, pairSessions, todayStr } from '@/lib/helpers';
 import type { Plan, Session, Sport } from '@/lib/types';
 import SessionRow from './SessionRow';
 import { IconChevronL, IconChevronR, IconFlag, IconX, IconZzz } from './icons';
@@ -13,9 +13,6 @@ interface Props {
   allSessions: Session[];
   onDelete: (id: string | number) => void;
 }
-
-const dateKey = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 export default function CalendarView({ plan, allSessions, onDelete }: Props) {
   const today = todayStr();
@@ -75,7 +72,7 @@ export default function CalendarView({ plan, allSessions, onDelete }: Props) {
       <div className="cal-grid">
         {days.map((d, i) => {
           if (!d) return <div key={i} aria-hidden="true" />;
-          const ds = dateKey(d);
+          const ds = dateStr(d);
           const data = dayMap[ds] ?? { planned: [], actual: [] };
           const isToday = ds === today;
           const isSel = ds === selectedDay;

@@ -1,6 +1,10 @@
 import type { Plan, Session, WeekTargets, WorkoutStep } from './types';
 
-export const todayStr = () => new Date().toISOString().split('T')[0];
+/** Format a Date as YYYY-MM-DD from LOCAL date components (never UTC). */
+export const dateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+export const todayStr = () => dateStr(new Date());
 
 export function getWeekDates(): string[] {
   const d = new Date();
@@ -9,7 +13,7 @@ export function getWeekDates(): string[] {
   return Array.from({ length: 7 }, (_, i) => {
     const x = new Date(mon);
     x.setDate(mon.getDate() + i);
-    return x.toISOString().split('T')[0];
+    return dateStr(x);
   });
 }
 
@@ -33,7 +37,11 @@ export function getCurrentPhase(plan: Plan | null): string | null {
 
 export function getRaceDays(plan: Plan | null): number | null {
   if (!plan?.raceDate) return null;
-  return Math.ceil((new Date(plan.raceDate + 'T12:00:00').getTime() - Date.now()) / 864e5);
+  // Whole-day difference anchored to local noon so the countdown rolls over
+  // at local midnight (0 = race day).
+  const race = new Date(plan.raceDate + 'T12:00:00').getTime();
+  const today = new Date(todayStr() + 'T12:00:00').getTime();
+  return Math.round((race - today) / 864e5);
 }
 
 export function getPlanned(plan: Plan | null, date: string): Session[] {

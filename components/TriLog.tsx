@@ -119,51 +119,87 @@ export default function TriLog() {
 
   // ── Persistence: server API, optimistic local state ──────────────────────
 
-  const addManual = async (s: Session) => {
-    const res = await fetch('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(s),
-      credentials: 'include',
-    });
-    if (res.ok) {
+  const addManual = async (s: Session): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(s),
+        credentials: 'include',
+      });
+      if (!res.ok) return false;
       const { id } = await res.json() as { id: number };
       setManual((prev) => [{ ...s, id }, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+      return true;
+    } catch {
+      return false;
     }
   };
 
-  const delManual = (id: string | number) => {
+  // Optimistic delete; restores the session and shows an error toast on failure.
+  const delManual = async (id: string | number) => {
+    const removed = manual.find((s) => s.id === id);
     setManual((prev) => prev.filter((s) => s.id !== id));
-    fetch(`/api/sessions?id=${id}`, { method: 'DELETE', credentials: 'include' }).catch(() => {});
-    showToast('Session deleted');
+    try {
+      const res = await fetch(`/api/sessions?id=${id}`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) throw new Error('delete failed');
+      showToast('Session deleted');
+    } catch {
+      if (removed) {
+        setManual((prev) =>
+          [removed, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+      }
+      showToast("Couldn't delete — try again", true);
+    }
   };
 
-  const savePlan = (p: Plan) => {
+  const savePlan = async (p: Plan) => {
+    const prev = plan;
     setPlan(p);
-    fetch('/api/plan', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(p),
-      credentials: 'include',
-    }).catch(() => {});
-    showToast('Plan loaded');
+    try {
+      const res = await fetch('/api/plan', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(p),
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('plan save failed');
+      showToast('Plan loaded');
+    } catch {
+      setPlan(prev);
+      showToast("Couldn't save plan — try again", true);
+    }
   };
 
-  const clearPlan = () => {
+  const clearPlan = async () => {
+    const prev = plan;
     setPlan(null);
-    fetch('/api/plan', { method: 'DELETE', credentials: 'include' }).catch(() => {});
+    try {
+      const res = await fetch('/api/plan', { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) throw new Error('plan clear failed');
+    } catch {
+      setPlan(prev);
+      showToast("Couldn't clear plan — try again", true);
+    }
   };
 
-  const saveTargets = (t: WeekTargets) => {
+  const saveTargets = async (t: WeekTargets) => {
+    const prev = customTargets;
     setCustomTargets(t);
     setShowTargets(false);
-    fetch('/api/targets', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(t),
-      credentials: 'include',
-    }).catch(() => {});
-    showToast('Targets saved');
+    try {
+      const res = await fetch('/api/targets', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(t),
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('targets save failed');
+      showToast('Targets saved');
+    } catch {
+      setCustomTargets(prev);
+      showToast("Couldn't save targets — try again", true);
+    }
   };
 
   const addSession = async () => {
@@ -180,7 +216,12 @@ export default function TriLog() {
       }),
       ...(!isNaN(hr) && hr > 0 && { heartRate: hr }),
     };
-    await addManual(s);
+    const ok = await addManual(s);
+    if (!ok) {
+      // Keep the form contents and stay on the Log tab so nothing is lost.
+      showToast("Couldn't save — try again", true);
+      return;
+    }
     setForm((f) => ({ ...f, date: todayStr(), ...EMPTY_FORM }));
     showToast('Session logged');
     setTimeout(() => setTab('week'), 400);
@@ -213,6 +254,21 @@ export default function TriLog() {
     { id: 'log'      as const, icon: IconPlusCircle, label: 'Log' },
     { id: 'plan'     as const, icon: IconTarget,     label: 'Plan' },
   ];
+
+  // ARIA tabs pattern: roving tabindex + arrow-key navigation with wrap-around.
+  const handleTablistKeyDown = (e: React.KeyboardEvent) => {
+    const idx = navTabs.findIndex((t) => t.id === tab);
+    let next: number | null = null;
+    if (e.key === 'ArrowRight') next = (idx + 1) % navTabs.length;
+    else if (e.key === 'ArrowLeft') next = (idx - 1 + navTabs.length) % navTabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = navTabs.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    const id = navTabs[next].id;
+    setTab(id);
+    document.getElementById(`tab-${id}`)?.focus();
+  };
 
   // ── Logged-out hero ───────────────────────────────────────────────────────
 
@@ -295,7 +351,13 @@ export default function TriLog() {
         {loading ? (
           <BootSkeleton />
         ) : (
-          <div className="view" key={tab}>
+          <div
+            className="view"
+            key={tab}
+            role="tabpanel"
+            id={`panel-${tab}`}
+            aria-labelledby={`tab-${tab}`}
+          >
             {tab === 'week' && (
               <WeekView
                 plan={plan} allSessions={all} weekDates={weekDates}
@@ -315,14 +377,17 @@ export default function TriLog() {
         )}
       </main>
 
-      <nav className="tab-bar" role="tablist" aria-label="Views">
+      <nav className="tab-bar" role="tablist" aria-label="Views" onKeyDown={handleTablistKeyDown}>
         {navTabs.map((t) => {
           const TabIcon = t.icon;
           return (
             <button
               key={t.id}
+              id={`tab-${t.id}`}
               role="tab"
               aria-selected={tab === t.id}
+              aria-controls={`panel-${t.id}`}
+              tabIndex={tab === t.id ? 0 : -1}
               className="tab-item"
               onClick={() => setTab(t.id)}
             >
