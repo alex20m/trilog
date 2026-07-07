@@ -1,37 +1,150 @@
 'use client';
 
-import { useState } from 'react';
-import { C, SPORTS } from '@/lib/constants';
-import type { Sport, WeekTargets } from '@/lib/types';
+import { useEffect, useRef, useState } from 'react';
+import { SPORTS, STEP_CLASS } from '@/lib/constants';
+import { fmtStep } from '@/lib/helpers';
+import type { Sport, WeekTargets, WorkoutStep } from '@/lib/types';
+import { SPORT_ICONS } from './icons';
 
-export function StatPill({ label, value }: { label: string; value: string | number }) {
+export function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '11px 14px' }}>
-      <div style={{ fontSize: '20px', fontWeight: '700', letterSpacing: '-0.5px' }}>{value}</div>
-      <div style={{ fontSize: '11px', color: C.muted, marginTop: '1px' }}>{label}</div>
+    <div className="stat-card">
+      <div className="value">{value}</div>
+      <div className="label">{label}</div>
     </div>
   );
 }
 
-export function Fld({ label, children }: { label: string; children: React.ReactNode }) {
+export function Field({
+  label,
+  optional,
+  error,
+  errorId,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  optional?: boolean;
+  error?: string | null;
+  errorId?: string;
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div style={{ marginBottom: '12px' }}>
-      <label style={{ display: 'block', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+    <div className="field">
+      <label className="field-label" htmlFor={htmlFor}>
         {label}
+        {optional && <span className="opt"> (optional)</span>}
       </label>
       {children}
+      {error && (
+        <p className="field-error" id={errorId}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
 
-export function PlanChip({ label, sub, color }: { label: string; sub: string; color?: string }) {
+export function Stepper({
+  value,
+  display,
+  step,
+  min,
+  max,
+  onChange,
+  small,
+  decLabel,
+  incLabel,
+}: {
+  value: number;
+  display: string;
+  step: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+  small?: boolean;
+  decLabel: string;
+  incLabel: string;
+}) {
   return (
-    <div>
-      <div style={{ fontSize: '18px', fontWeight: '700', color: color ?? C.navy, letterSpacing: '-0.3px' }}>{label}</div>
-      <div style={{ fontSize: '11px', color: C.muted }}>{sub}</div>
+    <div className={small ? 'stepper stepper-sm' : 'stepper'}>
+      <button
+        type="button"
+        className="stepper-btn"
+        onClick={() => onChange(Math.max(min, value - step))}
+        disabled={value <= min}
+        aria-label={decLabel}
+      >
+        −
+      </button>
+      <span className="stepper-value" role="status">
+        {display}
+      </span>
+      <button
+        type="button"
+        className="stepper-btn"
+        onClick={() => onChange(Math.min(max, value + step))}
+        disabled={value >= max}
+        aria-label={incLabel}
+      >
+        +
+      </button>
     </div>
   );
 }
+
+export function StepList({ steps, className }: { steps: WorkoutStep[]; className?: string }) {
+  return (
+    <div className={className ? `step-list ${className}` : 'step-list'}>
+      {steps.map((step, i) => (
+        <div key={i} className="step-row">
+          <span className={`step-type ${STEP_CLASS[step.type] ?? 'st-warmup'}`}>{step.type}</span>
+          <span className="step-detail">{fmtStep(step)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function EmptyState({
+  icon,
+  title,
+  body,
+  action,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="empty-state">
+      {icon}
+      <h3>{title}</h3>
+      <p>{body}</p>
+      {action}
+    </div>
+  );
+}
+
+export function BootSkeleton() {
+  return (
+    <div className="boot-skel" aria-busy="true" aria-label="Loading your training">
+      <div className="boot-skel-stats">
+        <div className="skeleton" />
+        <div className="skeleton" />
+        <div className="skeleton" />
+      </div>
+      <div className="skeleton skel-lg" />
+      <div className="skeleton skel-md" />
+      <div className="skeleton skel-md" />
+      <div className="skeleton skel-md" />
+    </div>
+  );
+}
+
+const TARGET_STEP: Record<Sport, number> = { run: 5, bike: 5, swim: 1, gym: 1 };
 
 export function TargetsSheet({
   targets,
@@ -43,27 +156,97 @@ export function TargetsSheet({
   onClose: () => void;
 }) {
   const [t, setT] = useState<WeekTargets>({ ...targets });
+  const [leaving, setLeaving] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  // Focus management + body scroll lock while open.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    sheetRef.current?.focus();
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      opener?.focus?.();
+    };
+  }, []);
+
+  const close = () => {
+    if (leaving) return;
+    setLeaving(true);
+    setTimeout(onClose, 200);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      close();
+      return;
+    }
+    // Minimal focus trap: keep Tab cycling inside the sheet.
+    if (e.key === 'Tab' && sheetRef.current) {
+      const focusables = sheetRef.current.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div style={{ background: C.surface, borderRadius: '20px 20px 0 0', padding: '20px 20px 36px', width: '100%', maxWidth: '560px' }}>
-        <p style={{ fontWeight: '700', fontSize: '16px', margin: '0 0 4px' }}>Weekly targets</p>
-        <p style={{ fontSize: '13px', color: C.muted, margin: '0 0 14px' }}>Overridden by plan when loaded</p>
-        {(Object.entries(SPORTS) as [Sport, typeof SPORTS[Sport]][]).map(([key, sport]) => (
-          <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 0', borderBottom: `1px solid ${C.border}` }}>
-            <span style={{ fontSize: '14px', fontWeight: '500' }}>{sport.icon} {sport.label}</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <input
-                type="number" min="0" value={t[key]}
-                onChange={(e) => setT((p) => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))}
-                style={{ width: '70px', textAlign: 'right', border: `1px solid ${C.border}`, borderRadius: '8px', padding: '6px 8px', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }}
-              />
-              <span style={{ fontSize: '13px', color: C.muted, minWidth: '52px' }}>{key === 'gym' ? 'sessions' : 'km'}</span>
+    <div
+      className={leaving ? 'sheet-backdrop is-leaving' : 'sheet-backdrop'}
+      onClick={(e) => { if (e.target === e.currentTarget) close(); }}
+    >
+      <div
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Weekly targets"
+        ref={sheetRef}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+      >
+        <div className="sheet-grab" aria-hidden="true" />
+        <p className="sheet-title t-h2">Weekly targets</p>
+        <p className="sheet-sub t-caption">Used when no plan is loaded</p>
+        {(Object.keys(SPORTS) as Sport[]).map((key) => {
+          const Icon = SPORT_ICONS[key];
+          const unit = key === 'gym' ? 'sessions' : 'km';
+          return (
+            <div key={key} className={`target-row sport-${key}`}>
+              <span className="target-label">
+                <Icon />
+                <span className="t-h3">{SPORTS[key].label}</span>
+              </span>
+              <span className="target-ctrl">
+                <Stepper
+                  small
+                  value={t[key]}
+                  display={String(t[key])}
+                  step={TARGET_STEP[key]}
+                  min={0}
+                  max={999}
+                  onChange={(v) => setT((p) => ({ ...p, [key]: v }))}
+                  decLabel={`Decrease ${SPORTS[key].label} target`}
+                  incLabel={`Increase ${SPORTS[key].label} target`}
+                />
+                <span className="target-unit t-caption">{unit}</span>
+              </span>
             </div>
-          </div>
-        ))}
-        <div style={{ display: 'flex', gap: '10px', marginTop: '18px' }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '13px', border: `1px solid ${C.border}`, borderRadius: '12px', background: 'none', cursor: 'pointer', fontSize: '14px', fontFamily: 'inherit' }}>Cancel</button>
-          <button onClick={() => onSave(t)} style={{ flex: 1, padding: '13px', border: 'none', borderRadius: '12px', background: C.navy, color: C.white, cursor: 'pointer', fontSize: '14px', fontWeight: '600', fontFamily: 'inherit' }}>Save</button>
+          );
+        })}
+        <div className="sheet-actions">
+          <button className="btn btn-ghost" onClick={close}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => onSave(t)}>Save targets</button>
         </div>
       </div>
     </div>

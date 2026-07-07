@@ -1,10 +1,11 @@
 'use client';
 
-import { C, SPORTS } from '@/lib/constants';
-import { fmtKm, getPlanned, todayStr } from '@/lib/helpers';
+import { SPORTS } from '@/lib/constants';
+import { fmtKm, getPlanned, pairSessions, todayStr } from '@/lib/helpers';
 import type { Plan, Session, Sport, WeekTargets } from '@/lib/types';
 import SessionRow from './SessionRow';
-import { StatPill } from './ui';
+import { IconChart, IconCheck, IconZzz, SPORT_ICONS } from './icons';
+import { EmptyState, StatCard } from './ui';
 
 interface WeekViewProps {
   plan: Plan | null;
@@ -14,129 +15,221 @@ interface WeekViewProps {
   targets: WeekTargets;
   gymDone: number;
   lastSync: string | null;
+  syncing: boolean;
   onDelete: (id: string | number) => void;
+  onQuickAdd: (sport: Sport | null) => void;
+  onGoLog: () => void;
 }
 
-export default function WeekView({ plan, allSessions, weekDates, weekTotals, targets, gymDone, lastSync, onDelete }: WeekViewProps) {
+const RING_C = 226.2; // 2π × 36
+
+export default function WeekView({
+  plan, allSessions, weekDates, weekTotals, targets, gymDone,
+  lastSync, syncing, onDelete, onQuickAdd, onGoLog,
+}: WeekViewProps) {
+  const today = todayStr();
+  const weekActual = allSessions.filter((s) => weekDates.includes(s.date));
   const totalKm = (Object.entries(weekTotals) as [Sport, number][])
     .filter(([k]) => k !== 'gym')
     .reduce((a, [, v]) => a + v, 0);
-  const weekActual = allSessions.filter((s) => weekDates.includes(s.date));
+
+  if (!plan && allSessions.length === 0) {
+    return (
+      <EmptyState
+        icon={<IconChart />}
+        title="No sessions yet"
+        body="Log your first workout or sync Strava to see your week fill up."
+        action={
+          <button className="btn btn-secondary" onClick={onGoLog}>
+            Log a session
+          </button>
+        }
+      />
+    );
+  }
+
+  // Per-sport completion: distance sports by km, gym by session count.
+  const bars: { key: Sport; done: number; target: number; unit: 'km' | 'sessions' }[] = [
+    { key: 'run', done: weekTotals.run || 0, target: targets.run || 0, unit: 'km' },
+    { key: 'bike', done: weekTotals.bike || 0, target: targets.bike || 0, unit: 'km' },
+    { key: 'swim', done: weekTotals.swim || 0, target: targets.swim || 0, unit: 'km' },
+    { key: 'gym', done: gymDone, target: targets.gym || 0, unit: 'sessions' },
+  ];
+  const withTargets = bars.filter((b) => b.target > 0);
+  const overall = withTargets.length
+    ? withTargets.reduce((a, b) => a + Math.min(b.done / b.target, 1), 0) / withTargets.length
+    : 0;
+  const overallPct = Math.round(overall * 100);
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
-        <StatPill label="Sessions" value={weekActual.length} />
-        <StatPill label="Total km" value={fmtKm(totalKm)} />
-        {lastSync && <StatPill label="Synced" value={lastSync} />}
+    <div className="week-grid">
+      <div className="week-aside">
+        <div className="stat-row">
+          <StatCard label="Sessions" value={weekActual.length} />
+          <StatCard label="Total km" value={fmtKm(totalKm)} />
+          <StatCard
+            label={lastSync || syncing ? 'Synced' : 'Not synced'}
+            value={syncing ? '…' : lastSync ?? '—'}
+          />
+        </div>
+
+        <section className="card progress-card">
+          <span className="t-overline">{plan ? 'Plan completion' : 'This week'}</span>
+          <div className="progress-body">
+            <svg
+              className={overallPct >= 100 ? 'progress-ring is-complete' : 'progress-ring'}
+              width="84" height="84" viewBox="0 0 84 84"
+              role="img" aria-label={`Week ${overallPct}% complete`}
+            >
+              <circle className="ring-track" cx="42" cy="42" r="36" fill="none"
+                stroke="var(--c-surface-2)" strokeWidth="8" />
+              <circle className="ring-fill" cx="42" cy="42" r="36" fill="none"
+                stroke="var(--c-accent)" strokeWidth="8" strokeLinecap="round"
+                transform="rotate(-90 42 42)"
+                strokeDasharray={RING_C}
+                style={{ strokeDashoffset: `calc(${RING_C} * (1 - var(--pct)))`, '--pct': overall } as React.CSSProperties}
+              />
+              <text x="42" y="47" textAnchor="middle">{overallPct}%</text>
+            </svg>
+            <div className="progress-bars">
+              {bars.map((b) => (
+                <ProgressItem key={b.key} sport={b.key} done={b.done} target={b.target} unit={b.unit} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <TodayCard plan={plan} allSessions={allSessions} onDelete={onDelete} onQuickAdd={onQuickAdd} />
       </div>
 
-      <div style={{ background: C.surface, borderRadius: '14px', border: `1px solid ${C.border}`, padding: '16px', marginBottom: '16px' }}>
-        <p style={{ margin: '0 0 14px', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
-          {plan ? 'Plan completion' : 'This week'}
-        </p>
-
-        {(['run', 'bike', 'swim'] as const).map((key) => {
-          const sport = SPORTS[key];
-          const done = weekTotals[key] || 0;
-          const target = targets[key] || 0;
-          const pct = target > 0 ? Math.min((done / target) * 100, 100) : 0;
-          const hit = target > 0 && done >= target;
-          return (
-            <div key={key} style={{ marginBottom: '14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '5px' }}>
-                <span style={{ fontSize: '14px', fontWeight: '500' }}>{sport.icon} {sport.label}</span>
-                <span style={{ fontSize: '13px' }}>
-                  <strong style={{ color: done > 0 ? (hit ? sport.color : C.text) : C.muted }}>{fmtKm(done)}</strong>
-                  <span style={{ color: C.muted }}> / {fmtKm(target)} km</span>
-                  {hit && <span style={{ color: sport.color, marginLeft: '4px' }}>✓</span>}
-                </span>
-              </div>
-              <div style={{ height: '6px', background: C.bg, borderRadius: '3px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: sport.color, borderRadius: '3px', transition: 'width 0.5s ease' }} />
-              </div>
-            </div>
-          );
-        })}
-
-        {(() => {
-          const sport = SPORTS.gym;
-          const target = targets.gym || 0;
-          const pct = target > 0 ? Math.min((gymDone / target) * 100, 100) : 0;
-          const hit = target > 0 && gymDone >= target;
-          return (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '5px' }}>
-                <span style={{ fontSize: '14px', fontWeight: '500' }}>{sport.icon} {sport.label}</span>
-                <span style={{ fontSize: '13px' }}>
-                  <strong style={{ color: gymDone > 0 ? (hit ? sport.color : C.text) : C.muted }}>{gymDone}</strong>
-                  <span style={{ color: C.muted }}> / {target} sessions</span>
-                  {hit && <span style={{ color: sport.color, marginLeft: '4px' }}>✓</span>}
-                </span>
-              </div>
-              <div style={{ height: '6px', background: C.bg, borderRadius: '3px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${pct}%`, background: sport.color, borderRadius: '3px', transition: 'width 0.5s ease' }} />
-              </div>
-            </div>
-          );
-        })()}
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {weekDates.map((date) => {
-          const planned = getPlanned(plan, date);
-          const actual = allSessions.filter((s) => s.date === date);
-          const isToday = date === todayStr();
-          const isPast = date < todayStr();
-          if (!plan && actual.length === 0 && isPast && !isToday) return null;
-          return <DayCard key={date} date={date} planned={planned} actual={actual} isToday={isToday} isPast={isPast} onDelete={onDelete} />;
-        })}
+      <div className="week-main">
+        <div className="day-list">
+          {weekDates.filter((d) => d !== today).map((date) => {
+            const planned = getPlanned(plan, date);
+            const actual = allSessions.filter((s) => s.date === date);
+            const isPast = date < today;
+            if (!plan && actual.length === 0 && isPast) return null;
+            return (
+              <DayCard key={date} date={date} planned={planned} actual={actual}
+                isPast={isPast} onDelete={onDelete} />
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
-interface DayCardProps {
+function ProgressItem({
+  sport, done, target, unit,
+}: {
+  sport: Sport;
+  done: number;
+  target: number;
+  unit: 'km' | 'sessions';
+}) {
+  const Icon = SPORT_ICONS[sport];
+  const label = SPORTS[sport].label;
+  const pct = target > 0 ? Math.min((done / target) * 100, 100) : 0;
+  const hit = target > 0 && done >= target;
+  const fmt = (n: number) => (unit === 'km' ? fmtKm(n) : String(n));
+
+  return (
+    <div className={`progress-item sport-${sport}${hit ? ' is-hit' : ''}`}>
+      <div className="progress-head">
+        <span className="progress-name">
+          <Icon /> {label}
+        </span>
+        <span className="progress-nums t-num">
+          <strong>{fmt(done)}</strong> / {fmt(target)} {unit}
+          <IconCheck className="hit-check" />
+        </span>
+      </div>
+      <div
+        className="progress-track"
+        role="progressbar"
+        aria-valuenow={Math.round(pct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${label}: ${fmt(done)} of ${fmt(target)} ${unit}`}
+      >
+        <div className="progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function TodayCard({
+  plan, allSessions, onDelete, onQuickAdd,
+}: {
+  plan: Plan | null;
+  allSessions: Session[];
+  onDelete: (id: string | number) => void;
+  onQuickAdd: (sport: Sport | null) => void;
+}) {
+  const today = todayStr();
+  const planned = getPlanned(plan, today);
+  const actual = allSessions.filter((s) => s.date === today);
+  const { rows, extras } = pairSessions(planned, actual);
+  const isRest = planned.length === 0 && actual.length === 0;
+  const firstOpenSport = rows.find((r) => !r.actual)?.planned.sport ?? null;
+  const label = new Date(today + 'T12:00:00')
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+  return (
+    <section className="card today-card">
+      <div className="today-head">
+        <span className="t-overline">Today · {label}</span>
+        <button className="btn-quick-add" onClick={() => onQuickAdd(firstOpenSport)}>
+          + Log
+        </button>
+      </div>
+      {isRest ? (
+        <span className="today-rest">
+          <IconZzz /> Rest day — recover well.
+        </span>
+      ) : (
+        <div className="session-list">
+          {rows.map((row, i) => (
+            <SessionRow key={i} planned={row.planned} actual={row.actual} onDelete={onDelete} />
+          ))}
+          {extras.map((s, i) => (
+            <SessionRow key={'extra-' + i} planned={null} actual={s} onDelete={onDelete} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DayCard({
+  date, planned, actual, isPast, onDelete,
+}: {
   date: string;
   planned: Session[];
   actual: Session[];
-  isToday: boolean;
   isPast: boolean;
   onDelete: (id: string | number) => void;
-}
-
-function DayCard({ date, planned, actual, isToday, isPast, onDelete }: DayCardProps) {
+}) {
   const isRest = planned.length === 0 && actual.length === 0;
-  const dayLabel = new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const dim = isRest && isPast;
+  const dayLabel = new Date(date + 'T12:00:00')
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const { rows, extras } = pairSessions(planned, actual);
 
-  const matchedActual = new Set<number>();
-  const rows = planned.map((p) => {
-    const match = actual.find((a, i) => a.sport === p.sport && !matchedActual.has(i));
-    if (match) matchedActual.add(actual.indexOf(match));
-    return { planned: p, actual: match ?? null };
-  });
-  const extras = actual.filter((_, i) => !matchedActual.has(i));
-
-  const dim = isRest && isPast && !isToday;
   return (
-    <div style={{
-      background: dim ? 'transparent' : C.surface,
-      borderRadius: '12px',
-      border: dim ? 'none' : `1px solid ${isToday ? C.navy + '60' : C.border}`,
-      borderLeft: dim ? 'none' : `4px solid ${isToday ? C.navy : C.border}`,
-      padding: dim ? '4px 14px' : '12px 14px',
-      opacity: dim ? 0.4 : 1,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isRest ? 0 : '10px' }}>
-        <span style={{ fontSize: '12px', fontWeight: '700', color: isToday ? C.navy : C.muted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          {dayLabel}{isToday && ' · Today'}
-        </span>
-      </div>
-      {isRest && <span style={{ fontSize: '13px', color: C.muted }}>Rest</span>}
-      {!isRest && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {rows.map((row, i) => <SessionRow key={i} planned={row.planned} actual={row.actual} onDelete={onDelete} />)}
-          {extras.map((s, i) => <SessionRow key={'extra-' + i} planned={null} actual={s} onDelete={onDelete} />)}
+    <div className={dim ? 'day-card is-dim' : 'day-card'}>
+      <span className="day-label t-overline">{dayLabel}</span>
+      {isRest ? (
+        <span className="day-rest">Rest</span>
+      ) : (
+        <div className="session-list">
+          {rows.map((row, i) => (
+            <SessionRow key={i} planned={row.planned} actual={row.actual} onDelete={onDelete} />
+          ))}
+          {extras.map((s, i) => (
+            <SessionRow key={'extra-' + i} planned={null} actual={s} onDelete={onDelete} />
+          ))}
         </div>
       )}
     </div>

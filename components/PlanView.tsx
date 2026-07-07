@@ -1,10 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { C, SPORTS, STEP_COLORS } from '@/lib/constants';
-import { getRaceDays, getCurrentPhase, fmtDate, fmtDur, fmtKm, fmtStep, todayStr, buildAIPrompt } from '@/lib/helpers';
+import { SPORTS } from '@/lib/constants';
+import {
+  buildAIPrompt, fmtDate, fmtDur, fmtKm, getCurrentPhase, getPlanWeekInfo,
+  getRaceDays, todayStr,
+} from '@/lib/helpers';
 import type { Plan, Session } from '@/lib/types';
-import { PlanChip } from './ui';
+import { IconCheck, IconClipboard, IconTarget, SPORT_ICONS } from './icons';
+import { EmptyState, StepList } from './ui';
 
 interface Props {
   plan: Plan | null;
@@ -40,67 +44,66 @@ export default function PlanView({ plan, allSessions, onSave, onClear }: Props) 
   if (plan) {
     const raceDays = getRaceDays(plan);
     const phase = getCurrentPhase(plan);
+    const weekInfo = getPlanWeekInfo(plan);
     const upcoming = (plan.sessions ?? []).filter((s) => s.date >= todayStr()).slice(0, 5);
 
     return (
       <div>
-        <div style={{ background: C.surface, borderRadius: '14px', border: `1px solid ${C.border}`, padding: '16px', marginBottom: '14px' }}>
-          <p style={{ margin: '0 0 8px', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Active plan</p>
-          <p style={{ margin: '0 0 4px', fontSize: '18px', fontWeight: '700', color: C.navy, letterSpacing: '-0.3px' }}>{plan.name ?? 'Training Plan'}</p>
-          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '10px' }}>
-            {phase && <PlanChip label={phase} sub="Current phase" />}
-            {raceDays !== null && raceDays >= 0 && <PlanChip label={`${raceDays} days`} sub="To race" color={raceDays < 14 ? '#C4622B' : undefined} />}
-            {plan.raceDate && <PlanChip label={fmtDate(plan.raceDate)} sub="Race date" />}
-            {plan.sessions && <PlanChip label={String(plan.sessions.length)} sub="Total sessions" />}
+        <section className="card plan-card">
+          <span className="t-overline">Active plan</span>
+          <h1 className="plan-name t-h1">{plan.name ?? 'Training Plan'}</h1>
+          <div className="plan-chips">
+            {phase && <PlanChip value={phase} label="Current phase" />}
+            {raceDays !== null && raceDays >= 0 && (
+              <PlanChip value={`${raceDays} days`} label="To race" warning={raceDays < 14} />
+            )}
+            {plan.raceDate && <PlanChip value={fmtDate(plan.raceDate)} label="Race date" />}
+            {plan.sessions && <PlanChip value={String(plan.sessions.length)} label="Total sessions" />}
           </div>
-        </div>
+        </section>
 
-        {plan.phases && (
-          <div style={{ background: C.surface, borderRadius: '14px', border: `1px solid ${C.border}`, padding: '14px 16px', marginBottom: '14px' }}>
-            <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Phases</p>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {plan.phases.map((p) => (
-                <div key={p.name} style={{ background: p.name === phase ? C.navy : C.bg, color: p.name === phase ? C.white : C.text, borderRadius: '8px', padding: '5px 10px', fontSize: '13px', fontWeight: '500' }}>
-                  {p.name} <span style={{ opacity: 0.65 }}>wk {Math.min(...p.weeks)}–{Math.max(...p.weeks)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+        {plan.phases && plan.phases.length > 0 && weekInfo && (
+          <section className="card phase-card">
+            <span className="t-overline section-label">Phases</span>
+            <PhaseTrack plan={plan} week={weekInfo.week} />
+            <span className="phase-caption t-caption t-num">
+              Week {Math.min(Math.max(weekInfo.week, 1), weekInfo.total)} of {weekInfo.total}
+              {phase ? ` · ${phase}` : ''}
+            </span>
+          </section>
         )}
 
         {upcoming.length > 0 && (
           <div>
-            <p style={{ margin: '0 0 10px', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Upcoming</p>
+            <span className="t-overline section-label">Upcoming</span>
             {upcoming.map((s, i) => {
-              const sport = SPORTS[s.sport];
+              const Icon = SPORT_ICONS[s.sport];
               return (
-                <div key={i} style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `4px solid ${sport.color}`, borderRadius: '10px', padding: '10px 14px', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: '600', fontSize: '14px' }}>{sport.icon} {sport.label}{s.distance ? ` · ${fmtKm(s.distance)} km` : ''}</span>
-                    <span style={{ fontSize: '12px', color: C.muted }}>{fmtDate(s.date)}</span>
+                <div key={i} className={`workout-card sport-${s.sport}`}>
+                  <div className="workout-head">
+                    <Icon />
+                    <span className="workout-title">
+                      <span className="t-h3">
+                        {SPORTS[s.sport].label}
+                        {s.distance ? ` · ${fmtKm(s.distance)} km` : ''}
+                      </span>
+                      {i === 0 && <span className="chip">NEXT</span>}
+                    </span>
+                    <span className="workout-date t-caption t-num">{fmtDate(s.date)}</span>
                   </div>
-                  <div style={{ fontSize: '12px', color: C.muted, marginTop: '3px' }}>
-                    {s.duration && fmtDur(s.duration)}
-                    {!s.steps && s.intensity && <span style={{ marginLeft: '6px', color: sport.color }}>{s.intensity}</span>}
-                    {s.note && <span style={{ fontStyle: 'italic' }}>{s.duration ? ' · ' : ''}{s.note}</span>}
+                  <div className="workout-meta">
+                    {s.duration ? <span className="t-num">{fmtDur(s.duration)}</span> : null}
+                    {!s.steps && s.intensity && <span className="intensity-chip">{s.intensity}</span>}
+                    {s.note && <span>{s.duration || (!s.steps && s.intensity) ? ' · ' : ''}{s.note}</span>}
                   </div>
-                  {s.steps && s.steps.length > 0 && (
-                    <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                      {s.steps.map((step, j) => (
-                        <div key={j} style={{ display: 'flex', gap: '6px', fontSize: '11px' }}>
-                          <span style={{ color: STEP_COLORS[step.type] ?? C.muted, fontWeight: '600', textTransform: 'capitalize', minWidth: '72px', flexShrink: 0 }}>{step.type}</span>
-                          <span style={{ color: C.muted }}>{fmtStep(step)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  {s.steps && s.steps.length > 0 && <StepList steps={s.steps} />}
                 </div>
               );
             })}
           </div>
         )}
 
-        <button onClick={onClear} style={{ width: '100%', marginTop: '8px', padding: '12px', border: `1px solid ${C.border}`, borderRadius: '12px', background: 'none', color: C.muted, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit' }}>
+        <button className="btn btn-ghost" style={{ width: '100%', marginTop: 'var(--sp-2)' }} onClick={onClear}>
           Replace plan
         </button>
       </div>
@@ -109,41 +112,85 @@ export default function PlanView({ plan, allSessions, onSave, onClear }: Props) 
 
   return (
     <div>
-      <div style={{ background: C.surface, borderRadius: '14px', border: `1px solid ${C.border}`, padding: '16px', marginBottom: '14px' }}>
-        <p style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Load training plan</p>
-        <p style={{ margin: '0 0 12px', fontSize: '14px', color: C.muted, lineHeight: '1.5' }}>
-          Paste a JSON training plan generated by an AI. The app will use it to populate the calendar, week view, and goals automatically.
-        </p>
+      <EmptyState
+        icon={<IconTarget />}
+        title="No plan loaded"
+        body="Paste a JSON plan below, or copy the AI prompt to generate one from your history."
+      />
+
+      <section className="card plan-card">
+        <span className="t-overline section-label">Load training plan</span>
+        <label className="field-label" htmlFor="plan-json">Plan JSON</label>
         <textarea
+          id="plan-json"
+          className={error ? 'input input-mono is-invalid' : 'input input-mono'}
           value={json}
           onChange={(e) => setJson(e.target.value)}
           placeholder={'{\n  "name": "Half IM 16-Week Plan",\n  "startDate": "2026-06-29",\n  "raceDate": "2026-10-18",\n  "sessions": [...]\n}'}
           rows={8}
-          style={{ width: '100%', padding: '10px 12px', border: `1px solid ${C.border}`, borderRadius: '10px', fontSize: '13px', outline: 'none', fontFamily: 'monospace', background: C.surface, color: C.text, resize: 'vertical', lineHeight: '1.5' }}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? 'err-plan-json' : undefined}
         />
-        {error && <p style={{ color: '#E53E3E', fontSize: '13px', margin: '8px 0 0' }}>{error}</p>}
-        <button onClick={handleLoad} style={{ width: '100%', marginTop: '10px', padding: '13px', border: 'none', borderRadius: '12px', background: C.navy, color: C.white, fontSize: '15px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit' }}>
+        {error && <p className="field-error" id="err-plan-json">{error}</p>}
+        <button className="btn btn-primary" style={{ marginTop: 'var(--sp-3)' }} onClick={handleLoad}>
           Load plan
         </button>
-      </div>
+      </section>
 
-      <div style={{ background: C.surface, borderRadius: '14px', border: `1px solid ${C.border}`, padding: '14px 16px' }}>
-        <p style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: '600', color: C.muted, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Generate a plan with AI</p>
-        <p style={{ margin: '0 0 12px', fontSize: '13px', color: C.muted, lineHeight: '1.5' }}>
-          Copy a prompt pre-filled with your training history, paste it into Claude or any AI, then paste the returned JSON above.
+      <section className="card plan-card">
+        <span className="t-overline section-label">Generate a plan with AI</span>
+        <p className="t-small" style={{ margin: '0 0 var(--sp-3)' }}>
+          Copy a prompt pre-filled with your training history, paste it into Claude or any AI,
+          then paste the returned JSON above.
         </p>
-        <button onClick={copyPrompt} style={{
-          width: '100%', padding: '12px', border: 'none', borderRadius: '10px',
-          background: copied ? C.green : C.navy, color: C.white,
-          fontSize: '14px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit',
-          transition: 'background 0.2s',
-        }}>
-          {copied ? '✓ Copied to clipboard!' : 'Copy AI prompt (with your history)'}
+        <button
+          className={copied ? 'btn btn-secondary is-copied' : 'btn btn-secondary'}
+          style={{ width: '100%' }}
+          onClick={copyPrompt}
+        >
+          {copied ? <IconCheck /> : <IconClipboard />}
+          {copied ? 'Copied' : 'Copy AI prompt (with your history)'}
         </button>
         {allSessions.length === 0 && (
-          <p style={{ margin: '8px 0 0', fontSize: '12px', color: C.muted }}>Connect Strava or log a few sessions first to personalise paces.</p>
+          <p className="t-caption" style={{ margin: 'var(--sp-2) 0 0' }}>
+            Connect Strava or log a few sessions first to personalise paces.
+          </p>
         )}
-      </div>
+      </section>
+    </div>
+  );
+}
+
+function PlanChip({ value, label, warning }: { value: string; label: string; warning?: boolean }) {
+  return (
+    <div className={warning ? 'plan-chip is-warning' : 'plan-chip'}>
+      <div className="value">{value}</div>
+      <div className="label">{label}</div>
+    </div>
+  );
+}
+
+function PhaseTrack({ plan, week }: { plan: Plan; week: number }) {
+  const phases = plan.phases!;
+  const currentIdx = phases.findIndex((p) => p.weeks.includes(week));
+  const current = currentIdx >= 0 ? phases[currentIdx] : null;
+  const ariaLabel = current
+    ? `Phase ${currentIdx + 1} of ${phases.length}: ${current.name}, weeks ${Math.min(...current.weeks)}–${Math.max(...current.weeks)}`
+    : `${phases.length} training phases`;
+
+  return (
+    <div className="phase-track" role="img" aria-label={ariaLabel}>
+      {phases.map((p) => {
+        const past = Math.max(...p.weeks) < week;
+        const isCurrent = p.weeks.includes(week);
+        const cls = ['phase-seg', past && 'is-past', isCurrent && 'is-current']
+          .filter(Boolean).join(' ');
+        return (
+          <div key={p.name} className={cls} style={{ flex: p.weeks.length }}>
+            {p.name}
+          </div>
+        );
+      })}
     </div>
   );
 }

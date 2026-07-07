@@ -40,6 +40,28 @@ export function getPlanned(plan: Plan | null, date: string): Session[] {
   return plan?.sessions?.filter((s) => s.date === date) ?? [];
 }
 
+/** Pair planned sessions with matching actuals (by sport, first unmatched wins). */
+export function pairSessions(planned: Session[], actual: Session[]) {
+  const matched = new Set<number>();
+  const rows = planned.map((p) => {
+    const idx = actual.findIndex((a, i) => a.sport === p.sport && !matched.has(i));
+    if (idx >= 0) matched.add(idx);
+    return { planned: p, actual: idx >= 0 ? actual[idx] : null };
+  });
+  const extras = actual.filter((_, i) => !matched.has(i));
+  return { rows, extras };
+}
+
+/** Current plan week number and total weeks, for the phase timeline. */
+export function getPlanWeekInfo(plan: Plan | null): { week: number; total: number } | null {
+  if (!plan?.phases?.length || !plan.startDate) return null;
+  const week = Math.floor(
+    (Date.now() - new Date(plan.startDate + 'T12:00:00').getTime()) / (7 * 864e5)
+  ) + 1;
+  const total = Math.max(...plan.phases.flatMap((p) => p.weeks));
+  return { week, total };
+}
+
 export function getWeekTargets(
   plan: Plan | null,
   weekDates: string[],
